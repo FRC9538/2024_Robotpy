@@ -1,4 +1,3 @@
-from venv import logger
 import wpilib
 import wpilib.drive
 from rev import CANSparkMax
@@ -35,7 +34,6 @@ class MyRobot(wpilib.TimedRobot):
         self.l_drive_follow.follow(self.l_drive_lead)
         self.r_drive_follow.follow(self.r_drive_lead)
         
-
     def teleopPeriodic(self):
         match self.drive_mode:
             case 0:
