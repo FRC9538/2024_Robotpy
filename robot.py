@@ -7,9 +7,23 @@ from rev import CANSparkMax
 
 COMPETITION = False
 
+# preferences
+ARMPKEY = "ArmP"
+ARMIKEY = "ArmI"
+ARMDKEY = "ArmD"
+
+
 class MyRobot(wpilib.TimedRobot):
-    
     def robotInit(self):
+        # Preferences init
+        # defaults
+        self.arm_Kp = 0
+        self.arm_Ki = 0
+        self.arm_Kd = 0
+        wpilib.Preferences.initDouble(ARMPKEY, self.arm_Kp)
+        wpilib.Preferences.initDouble(ARMIKEY, self.arm_Ki)
+        wpilib.Preferences.initDouble(ARMDKEY, self.arm_Kd)
+        
         self.l_drive_lead   = CANSparkMax(1, CANSparkMax.MotorType.kBrushed)
         self.l_drive_follow = CANSparkMax(3, CANSparkMax.MotorType.kBrushed)
         self.r_drive_lead   = CANSparkMax(2, CANSparkMax.MotorType.kBrushed)
@@ -39,12 +53,9 @@ class MyRobot(wpilib.TimedRobot):
         self.r_arm = CANSparkMax(7, CANSparkMax.MotorType.kBrushless)
         self.r_arm.follow(self.l_arm)
         
-        # TUNE THESE
-        arm_Kp = 0
-        arm_Ki = 0
-        arm_Kd = 0
-        
-        self.arm_pid = PIDController(arm_Kp, arm_Ki, arm_Kd)
+        # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
+        # might change this
+        self.arm_pid = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
         # probablly enable continuous input but i dont know the angles of the arm and stuff yet
         
         # shooter setup
@@ -71,8 +82,23 @@ class MyRobot(wpilib.TimedRobot):
         # 4 - drive speed
         # when changed there is no way to go back to 0 currently
         self.lstick_operation = 0 
+    
+    def loadPreferences(self):
+        if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
+            self.arm_Kp = wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp)
+            self.arm_pid.setP(self.arm_Kp)
         
+        if self.arm_Ki != wpilib.Preferences.getDouble(ARMIKEY, self.arm_Ki):
+            self.arm_Ki = wpilib.Preferences.getDouble(ARMIKEY, self.arm_Ki)
+            self.arm_pid.setI(self.arm_Ki)
         
+        if self.arm_Kd != wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd):
+            self.arm_Kd = wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd)
+            self.arm_pid.setD(self.arm_Kd)
+    
+    def teleopInit(self):
+        self.loadPreferences()
+    
     def teleopPeriodic(self):
         match self.drive_mode: # for fun :)
             case 0:
@@ -93,9 +119,9 @@ class MyRobot(wpilib.TimedRobot):
             case 3: # arm angle
                 pass
             case 4: # drive speed
-                # change 0.007 based on the speed at which the drive speed changes when using the left stick (that was fun to read and write)
-                # this clamps it with maximun of 1 and minumun of 0.3 (its not backwards)
-                self.drive_speed = max(0.3, min(1, self.drive_speed-(self.controller.getLeftX() * 0.007)))
+                # Sets speed to be left stick position when left bumper is pressed
+                if self.controller.getLeftBumper():
+                    self.drive_speed = ((-self.controller.getLeftX())+1)/2
         
         self.l_shooter.set(self.shooter_speed)
         self.intake.set(self.intake_speed)
