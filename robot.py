@@ -55,46 +55,39 @@ class MyRobot(wpilib.TimedRobot):
         
         # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
         # might change this
-        self.arm_pid = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
-        # probablly enable continuous input but i dont know the angles of the arm and stuff yet
+        self.arm_controller = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
+        self.arm_encoder = self.l_arm.getEncoder()
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
         self.r_shooter.follow(self.l_shooter)
-        
-        self.shooter_speed = 0 # 0-1
 
         # intake setup
         self.intake = CANSparkMax(10, CANSparkMax.MotorType.kBrushless) # maybe rename
-        
-        self.intake_speed = 0 # 0-1
-
         
         #Contoller setup. We are using the OceanGate controller (logitech f310) on port 0
         self.controller = wpilib.XboxController(0)
         
         # what the left stick controls
         # 0 - nothing
-        # 1 - shooter speed
-        # 2 - intake speed
-        # 3 - arm angle
-        # 4 - drive speed
+        # 1 - arm angle
+        # 2 - drive speed
         # when changed there is no way to go back to 0 currently
         self.lstick_operation = 0 
     
     def loadPreferences(self):
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
             self.arm_Kp = wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp)
-            self.arm_pid.setP(self.arm_Kp)
+            self.arm_controller.setP(self.arm_Kp)
         
         if self.arm_Ki != wpilib.Preferences.getDouble(ARMIKEY, self.arm_Ki):
             self.arm_Ki = wpilib.Preferences.getDouble(ARMIKEY, self.arm_Ki)
-            self.arm_pid.setI(self.arm_Ki)
+            self.arm_controller.setI(self.arm_Ki)
         
         if self.arm_Kd != wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd):
             self.arm_Kd = wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd)
-            self.arm_pid.setD(self.arm_Kd)
+            self.arm_controller.setD(self.arm_Kd)
     
     def teleopInit(self):
         self.loadPreferences()
@@ -112,20 +105,19 @@ class MyRobot(wpilib.TimedRobot):
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
             
         match self.lstick_operation:
-            case 1: # shooter speed
+            case 1: # arm angle
                 pass
-            case 2: # intake speed
-                pass
-            case 3: # arm angle
-                pass
-            case 4: # drive speed
+            case 2: # drive speed
                 # Sets speed to be left stick position when left bumper is pressed
                 if self.controller.getLeftBumper():
                     self.drive_speed = ((-self.controller.getLeftX())+1)/2
         
-        self.l_shooter.set(self.shooter_speed)
-        self.intake.set(self.intake_speed)
-            
+        # conflicts with drive mode 2
+        self.l_shooter.set(self.controller.getLeftTriggerAxis())
+        self.intake.set(self.controller.getRightTriggerAxis())
+    
+        # self.l_arm.set(self.arm_controller.calculate(self.arm_encoder.getPosition(), ))
+        
         # dpad thing pressed
         if self.controller.getPOV() != -1:
             pass
@@ -135,5 +127,5 @@ class MyRobot(wpilib.TimedRobot):
         
         # THIS IS FOR TESTING DELETE WHEN DPAD THING WORKS or not if you like it
         if self.controller.getAButtonPressed():
-            self.lstick_operation = 1 if self.lstick_operation == 4 else self.lstick_operation+1
+            self.lstick_operation = 1 if self.lstick_operation == 2 else self.lstick_operation+1
         
