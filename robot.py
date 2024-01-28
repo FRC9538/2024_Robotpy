@@ -10,6 +10,7 @@ COMPETITION = False
 # preferences
 ARMPKEY = "ArmP"
 ARMIKEY = "ArmI"
+ARMIZONEKEY = "ArmIZone"
 ARMDKEY = "ArmD"
 
 
@@ -19,9 +20,11 @@ class MyRobot(wpilib.TimedRobot):
         # defaults
         self.arm_Kp = 0
         self.arm_Ki = 0
+        self.arm_KiZone = float('inf')
         self.arm_Kd = 0
         wpilib.Preferences.initDouble(ARMPKEY, self.arm_Kp)
         wpilib.Preferences.initDouble(ARMIKEY, self.arm_Ki)
+        wpilib.Preferences.initDouble(ARMIZONEKEY, self.arm_KiZone)
         wpilib.Preferences.initDouble(ARMDKEY, self.arm_Kd)
         
         self.l_drive_lead   = CANSparkMax(1, CANSparkMax.MotorType.kBrushed)
@@ -56,7 +59,10 @@ class MyRobot(wpilib.TimedRobot):
         # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
         # might change this
         self.arm_controller = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
+        self.arm_controller.setIZone(self.arm_KiZone)
         self.arm_encoder = self.l_arm.getEncoder()
+        self.arm_angle = 0
+        
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
@@ -69,13 +75,6 @@ class MyRobot(wpilib.TimedRobot):
         #Contoller setup. We are using the OceanGate controller (logitech f310) on port 0
         self.controller = wpilib.XboxController(0)
         
-        # what the left stick controls
-        # 0 - nothing
-        # 1 - arm angle
-        # 2 - drive speed
-        # when changed there is no way to go back to 0 currently
-        self.lstick_operation = 0 
-    
     def loadPreferences(self):
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
             self.arm_Kp = wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp)
@@ -85,6 +84,10 @@ class MyRobot(wpilib.TimedRobot):
             self.arm_Ki = wpilib.Preferences.getDouble(ARMIKEY, self.arm_Ki)
             self.arm_controller.setI(self.arm_Ki)
         
+        if self.arm_KiZone != wpilib.Preferences.getDouble(ARMIZONEKEY, self.arm_KiZone):
+            self.arm_KiZone = wpilib.Preferences.getDouble(ARMIZONEKEY, self.arm_KiZone)
+            self.arm_controller.setIZone(self.arm_KiZone)
+        
         if self.arm_Kd != wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd):
             self.arm_Kd = wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd)
             self.arm_controller.setD(self.arm_Kd)
@@ -93,6 +96,10 @@ class MyRobot(wpilib.TimedRobot):
         self.loadPreferences()
     
     def teleopPeriodic(self):
+        # Sets speed to be left stick position when left bumper is pressed
+        if self.controller.getLeftBumper():
+            self.drive_speed = (-self.controller.getLeftX()+1)/2
+        
         match self.drive_mode: # for fun :)
             case 0:
                 # normal right stick drive
@@ -104,28 +111,16 @@ class MyRobot(wpilib.TimedRobot):
         if self.controller.getStartButtonPressed() and self.controller.getRightBumper() and not COMPETITION:
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
             
-        match self.lstick_operation:
-            case 1: # arm angle
-                pass
-            case 2: # drive speed
-                # Sets speed to be left stick position when left bumper is pressed
-                if self.controller.getLeftBumper():
-                    self.drive_speed = ((-self.controller.getLeftX())+1)/2
-        
         # conflicts with drive mode 2
         self.l_shooter.set(self.controller.getLeftTriggerAxis())
         self.intake.set(self.controller.getRightTriggerAxis())
-    
-        # self.l_arm.set(self.arm_controller.calculate(self.arm_encoder.getPosition(), ))
         
         # dpad thing pressed
         if self.controller.getPOV() != -1:
-            pass
-            # set lstick_operation here
-            # only in each sides 45 degree angle maybe more
-            # (ignore inbetween)
-        
-        # THIS IS FOR TESTING DELETE WHEN DPAD THING WORKS or not if you like it
-        if self.controller.getAButtonPressed():
-            self.lstick_operation = 1 if self.lstick_operation == 2 else self.lstick_operation+1
+            if self.controller.getPOV() == 270:
+                self.arm_angle = max(0, min(180, self.arm_angle-0.5))
+            elif self.controller.getPOV() == 90:
+                self.arm_angle = max(0, min(180, self.arm_angle+0.5))
+                
+        # self.l_arm.set(self.arm_controller.calculate(self.arm_encoder.getPosition(), ))
         
