@@ -116,11 +116,14 @@ class MyRobot(wpilib.TimedRobot):
         self.intake.set(self.controller.getRightTriggerAxis())
         
         # dpad thing pressed
-        if self.controller.getPOV() != -1:
-            if self.controller.getPOV() == 270:
-                self.arm_angle = max(0, min(180, self.arm_angle-0.5))
-            elif self.controller.getPOV() == 90:
-                self.arm_angle = max(0, min(180, self.arm_angle+0.5))
-                
+        match self.controller.getPOV():
+            case 270:
+                self.l_arm.set(-0.3)
+            case 90:
+                self.l_arm.set(0.3)
+            case _:
+                # might be redundant
+                self.l_arm.set(0)
+               
         # self.l_arm.set(self.arm_controller.calculate(self.arm_encoder.getPosition(), ))
         
