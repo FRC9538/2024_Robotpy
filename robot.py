@@ -1,3 +1,4 @@
+from math import fabs
 import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
@@ -20,7 +21,7 @@ class MyRobot(wpilib.TimedRobot):
         # defaults
         self.arm_Kp = 0
         self.arm_Ki = 0
-        self.arm_KiZone = 0
+        self.arm_KiZone = float('inf')
         self.arm_Kd = 0
         wpilib.Preferences.initDouble(ARMPKEY, self.arm_Kp)
         wpilib.Preferences.initDouble(ARMIKEY, self.arm_Ki)
@@ -36,61 +37,50 @@ class MyRobot(wpilib.TimedRobot):
 
         self.drive_mode = 0
         self.drive_speed = 1 
-
-        # For carninal plane driving, can not get it work. SparkMax error
-        # self.robot_drive = wpilib.drive.MecanumDrive(self.l_drive_lead, self.l_drive_follow, self.r_drive_lead,self.r_drive_follow)
-        
-        # FOR THE LOVE OF GOD DO NOT LET ANY BE SET TO TRUE (false by default so unset is fine)
-        # This is not needed it was for testing so please remove if you plan on configuring the spark maxs at all or just if you feel like it
-        self.l_drive_lead.restoreFactoryDefaults(False)
-        self.l_drive_follow.restoreFactoryDefaults(False)
-        self.r_drive_lead.restoreFactoryDefaults(False)
-        self.r_drive_follow.restoreFactoryDefaults(False)
         
         # invert follow motors here if needed
         self.l_drive_follow.follow(self.l_drive_lead)
         self.r_drive_follow.follow(self.r_drive_lead)
         
-    # arm setup
-
-
+        # arm setup
         self.l_arm = CANSparkMax(6, CANSparkMax.MotorType.kBrushless)
         self.r_arm = CANSparkMax(7, CANSparkMax.MotorType.kBrushless)
-        self.r_arm.setInverted(True)
+        self.r_arm.follow(self.l_arm, True) # right arm is inverted
+
+        self.arm_angle = 0 # 0-90
         
         # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
         # might change this
-
-        #left arm is set at 75% of right arm
-        self.arm_ratio = 0.75
-
-        # unused, testing WPI PID control
         self.arm_controller = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
         self.arm_controller.setIZone(self.arm_KiZone)
-
         self.arm_encoder = self.l_arm.getEncoder()
         self.arm_angle = 0
-        #for P
-        self.arm_tick_constant = 360/200
-        #for I
-        self.arm_last_timestamp = wpilib.getTime()
-        self.arm_error_sum = 0
-        #for D
-        self.arm_last_error = 0
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
         self.r_shooter.follow(self.l_shooter)
+        self.shooter_timer = wpilib.Timer()
+        self.shooter_speed = 1
+        self.shooting = False
 
+        self.beam_break = wpilib.DigitalInput(9)
+        
         # intake setup
         self.intake = CANSparkMax(10, CANSparkMax.MotorType.kBrushless) # maybe rename
+        self.intake_speed = 0.5
+        self.intake_shoot_speed = 1
+        self.intake_running = False
+        self.intake_timer = wpilib.Timer()
+        self.loaded = False
         
         #Contoller setup. We are using the OceanGate controller (logitech f310) on port 0
         self.controller = wpilib.XboxController(0)
+        self.last_pov = -1
         
+
+
     def loadPreferences(self):
-        # Uploads PID constants from smart dashbaord on driver station
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
             self.arm_Kp = wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp)
             self.arm_controller.setP(self.arm_Kp)
@@ -107,6 +97,39 @@ class MyRobot(wpilib.TimedRobot):
             self.arm_Kd = wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd)
             self.arm_controller.setD(self.arm_Kd)
     
+
+
+    def shooterPeriodic(self):
+        # INTAKE
+        print(self.beam_break.get())
+        if self.beam_break.get() == True:
+            self.intake_timer.restart()
+            self.loaded = True
+            self.intake_running = False
+        
+        if self.intake_timer.get() < 0.1 and self.intake_running:
+            self.intake.set(-self.intake_speed)
+        elif self.intake_timer.get() >= 0.1 :
+            self.loaded = True
+        else: # safety
+            if self.intake_running:
+                # self.intake.set(self.intake_speed)
+                print("wrong")
+            else:
+                self.intake.set(0)
+                
+        # SHOOTER
+        if self.shooting:
+            self.l_shooter.set(self.shooter_speed)
+            if self.shooter_timer.get() >= 1: # after one second
+                self.intake.set(self.intake_speed)
+                
+            if self.shooter_timer.get() >= 4:
+                self.shooting = False
+        else:
+            self.l_shooter.set(0)
+            
+    
     def teleopInit(self):
         self.loadPreferences()
     
@@ -122,75 +145,72 @@ class MyRobot(wpilib.TimedRobot):
             case 1:
                 # mariocart shoulder trigger drive with right stick steering
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, (self.controller.getRightTriggerAxis()-self.controller.getLeftTriggerAxis()) * self.drive_speed)
-                
+        #for fun        
         if self.controller.getStartButtonPressed() and self.controller.getRightBumper() and not COMPETITION:
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
-            
-        # conflicts with drive mode 2
-        self.l_shooter.set(self.controller.getLeftTriggerAxis())
-        self.intake.set(self.controller.getRightTriggerAxis())
+        #intake on if not already on
+        # if self.controller.getAButtonPressed() and not self.loaded:
+        #     self.intake_running = (not self.intake_running)
+        #     self.intake_timer.restart()
+        #shooter on if loaded
+        # if self.controller.getBackButtonPressed() and self.loaded:
+        #     self.shooter_timer.restart()
+        #     self.shooting = True
+        
+        # self.shooterPeriodic()
+        self.intake.set(-self.controller.getLeftTriggerAxis())
+        self.l_shooter.set(-self.controller.getRightTriggerAxis())
         
         # dpad thing pressed
+        if self.controller.getPOV() != self.last_pov:
+            match self.controller.getPOV():
+                case 180:
+                    self.arm_angle = max(0, min(110, self.arm_angle-5))
+                    print("angle ", self.arm_angle)
+                case 0:
+                    self.arm_angle = max(0, min(110, self.arm_angle+5))
+                    print("angle ", self.arm_angle)
+                case 90:
+                    self.arm_angle = 70.25 * 1.82
+
+                    
+        self.last_pov = self.controller.getPOV()
         
-        match self.controller.getPOV():
-            case 0:
-                self.arm_angle += 3
-            case 180:
-                self.arm_angle -= 3
-            
-             #used for testing 
-            case 270:
-                self.l_arm.set(0.3 * self.arm_ratio)
-                self.r_arm.set(-0.3)
-            case 90:
-                self.l_arm.set(-0.3 * self.arm_ratio)
-                self.r_arm.set(0.3)
-           
-            case _:
-                # might be redundant
-                self.l_arm.set(0)
-                self.r_arm.set(0)
-
-
-
-     # PID Arm Control
-                
+        if self.controller.getBButton():
+            self.arm_angle = 40
+        if self.controller.getYButton():
+            self.arm_angle = 60
+            print(self.arm_encoder.getPosition())
+        if self.controller.getXButton():
+            self.arm_angle = 100
+            print(self.arm_encoder.getPosition())
         if self.controller.getAButton():
-            self.arm_angle = 5
-        elif self.controller.getBButton():
-            self.arm_angle = 90
-        elif self.controller.getYButton():
-            self.arm_angle = 30
-        # Arm P
-        self.arm_sensor_position = self.arm_encoder.getPosition() * self.arm_tick_constant
-        self.arm_error = self.arm_angle - self.arm_sensor_position
+            self.arm_angle = 10
+
+        # arm pid is broken rn some of this was also for testing
+        arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
+        # arm_speed = self.arm_controller.calculate(0, angleToRotations(self.arm_angle)) 
+        self.error = ((self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor()) - (angleToRotations(self.arm_angle)))
+        print("Error: ")
+        print(self.error)
+        #make into precentage
+
+        self.arm_controller.setTolerance
+
+        arm_speed =  max(-0.45, min(0.46, arm_speed/100))
         
-        print('Arm Sensor Position: ') 
-        print(self.arm_sensor_position)
-        print('Kp Constant: ')
-        print(self.arm_Kp)
-        #Arm I
-        self.arm_dt = wpilib.getTime() - self.arm_last_timestamp
-        # I Zone
-        if abs(self.arm_error) < self.arm_KiZone:
-            self.arm_error_sum += self.arm_error * self.arm_dt
-        #Arm D
-        self.arm_error_rate = (self.arm_error - self.arm_last_error) / self.arm_dt
-
-        #Find PID Speed Control
-        self.arm_speed = (self.arm_Kp * self.arm_error + self.arm_Ki * self.arm_error_sum + self.arm_Kd * self.arm_error_rate)/100
-        print('Arm Speed: ')
-        print(self.arm_speed)
-
-        # THE ARMS DON'T MOVE AT THE SAME SPEED UGHHHH!!!! THERE IS A GEAR RATIO CONSTANT OF 1.25 APPLIED TO THE RIGHT ARM
-        # BUT IT DOESNT WORK! CAREFUL BECAUSE THEY REALLY WANT TO TEAR THEMSELVES IN HALF
-        self.l_arm.set(1 * self.arm_speed)
-        self.r_arm.set(1 * self.arm_speed)
-
-        #updating PID varibles
-        self.arm_last_timestamp = wpilib.getTime()
-        self.arm_last_error = self.arm_error
-
-               
-        # self.l_arm.set(self.arm_controller.calculate(self.arm_encoder.getPosition(), ))
         
+        print("Speed: ")
+        print(arm_speed)
+
+        # different gear ratio :P
+        self.l_arm.set(arm_speed)
+
+        
+        print("Izone: ")
+        print(self.arm_KiZone)
+        print("I: ")
+        print(self.arm_Ki)
+        
+def angleToRotations(angle):
+    return angle/1.82
