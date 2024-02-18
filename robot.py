@@ -139,7 +139,7 @@ class MyRobot(wpilib.TimedRobot):
     
     def teleopPeriodic(self):
         # Sets speed to be left stick position when left bumper is pressed
-        if self.controller.getLeftBumper():
+        if self.controller.getLeftBumperPressed():
             match self.bumper_cylce:
                 case 0:
                     self.drive_speed = 1
@@ -149,17 +149,19 @@ class MyRobot(wpilib.TimedRobot):
                     self.drive_speed = 0.5
                 case 3:
                     self.drive_speed = 0.3
-                    self.bumper_cylce = 0
+                    self.bumper_cylce = -1
 
             self.bumper_cylce += 1
 
-            self.rotation_precentage = 1 - abs(self.controller.getRightX())
+            rotation_precentage = 1
+            print(f"Drive speed: {self.drive_speed}")
 
         
         match self.drive_mode: # for fun :)
             case 0:
                 # normal right stick drive
-                self.robot_drive.arcadeDrive(self.controller.getLeftX() * self.drive_speed, self.controller.getLeftY()*self.drive_speed*self.rotation_precentage)
+                rotation_precentage = 1 - abs(self.controller.getRightX())
+                self.robot_drive.arcadeDrive(self.controller.getLeftX() * self.drive_speed, self.controller.getLeftY()*self.drive_speed* rotation_precentage)
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, -self.controller.getRightY() * self.drive_speed)
             case 1:
                 # mariocart shoulder trigger drive with right stick steering
@@ -210,26 +212,14 @@ class MyRobot(wpilib.TimedRobot):
         arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
         # arm_speed = self.arm_controller.calculate(0, angleToRotations(self.arm_angle)) 
         self.error = ((self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor()) - (angleToRotations(self.arm_angle)))
-        print("Error: ")
-        print(self.error)
+
         #make into precentage
 
         self.arm_controller.setTolerance
 
         arm_speed =  max(-0.45, min(0.46, arm_speed/100))
-        
-        
-        print("Speed: ")
-        print(arm_speed)
 
         # different gear ratio :P
         self.l_arm.set(arm_speed)
-
-        
-        print("Izone: ")
-        print(self.arm_KiZone)
-        print("I: ")
-        print(self.arm_Ki)
-        
 def angleToRotations(angle):
     return angle/1.82
