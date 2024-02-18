@@ -1,3 +1,4 @@
+from math import fabs
 import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
@@ -36,6 +37,7 @@ class MyRobot(wpilib.TimedRobot):
 
         self.drive_mode = 0
         self.drive_speed = 1 
+        self.bumper_cylce = 0
         
         # invert follow motors here if needed
         self.l_drive_follow.follow(self.l_drive_lead)
@@ -44,7 +46,7 @@ class MyRobot(wpilib.TimedRobot):
         # arm setup
         self.l_arm = CANSparkMax(6, CANSparkMax.MotorType.kBrushless)
         self.r_arm = CANSparkMax(7, CANSparkMax.MotorType.kBrushless)
-        self.r_arm.setInverted(True)
+        self.r_arm.follow(self.l_arm, True) # right arm is inverted
         self.arm_angle = 0 # 0-90
         
         # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
@@ -132,20 +134,36 @@ class MyRobot(wpilib.TimedRobot):
     
     def teleopPeriodic(self):
         # Sets speed to be left stick position when left bumper is pressed
-        if self.controller.getLeftBumper():
-            self.drive_speed = (-self.controller.getLeftX()+1)/2
+        if self.controller.getLeftBumperPressed():
+            match self.bumper_cylce:
+                case 0:
+                    self.drive_speed = 1
+                case 1:
+                    self.drive_speed = 0.75
+                case 2: 
+                    self.drive_speed = 0.5
+                case 3:
+                    self.drive_speed = 0.3
+                    self.bumper_cylce = -1
+
+            self.bumper_cylce += 1
+
+            rotation_precentage = 1
+            print(f"Drive speed: {self.drive_speed}")
+
         
         match self.drive_mode: # for fun :)
             case 0:
                 # normal right stick drive
+                rotation_precentage = 1 - abs(self.controller.getRightX())
+                self.robot_drive.arcadeDrive(self.controller.getLeftX() * self.drive_speed, self.controller.getLeftY()*self.drive_speed* rotation_precentage)
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, -self.controller.getRightY() * self.drive_speed)
             case 1:
                 # mariocart shoulder trigger drive with right stick steering
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, (self.controller.getRightTriggerAxis()-self.controller.getLeftTriggerAxis()) * self.drive_speed)
-                
+        #for fun        
         if self.controller.getStartButtonPressed() and self.controller.getRightBumper() and not COMPETITION:
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
-        
         if self.controller.getAButtonPressed() and not self.loaded:
             self.intake_running = not self.intake_running
             
@@ -156,29 +174,41 @@ class MyRobot(wpilib.TimedRobot):
         # dpad thing pressed
         if self.controller.getPOV() != self.last_pov:
             match self.controller.getPOV():
-                case 270:
-                    self.arm_angle = max(0, min(90, self.arm_angle-15))
+                case 180:
+                    self.arm_angle = max(0, min(110, self.arm_angle-5))
+                    print("angle ", self.arm_angle)
+                case 0:
+                    self.arm_angle = max(0, min(110, self.arm_angle+5))
                     print("angle ", self.arm_angle)
                 case 90:
-                    self.arm_angle = max(0, min(90, self.arm_angle+15))
-                    print("angle ", self.arm_angle)
+                    self.arm_angle = 70.25 * 1.82
+
                     
         self.last_pov = self.controller.getPOV()
-            
+        
+        if self.controller.getBButton():
+            self.arm_angle = 40
+        if self.controller.getYButton():
+            self.arm_angle = 60
+            print(self.arm_encoder.getPosition())
+        if self.controller.getXButton():
+            self.arm_angle = 100
+            print(self.arm_encoder.getPosition())
+        if self.controller.getAButton():
+            self.arm_angle = 10
+
         # arm pid is broken rn some of this was also for testing
-        # arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
-        # arm_speed = self.arm_controller.calculate(0, angleToRotations(self.arm_angle))
-        
-        # if arm_speed != 0:
-        #     print(arm_speed)
+        arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
+        # arm_speed = self.arm_controller.calculate(0, angleToRotations(self.arm_angle)) 
+        self.error = ((self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor()) - (angleToRotations(self.arm_angle)))
+
+        #make into precentage
+
+        self.arm_controller.setTolerance
+
+        arm_speed =  max(-0.45, min(0.46, arm_speed/100))
+
         # different gear ratio :P
-        # self.l_arm.set(arm_speed * 0.75)
-        # self.r_arm.set(arm_speed)
-    
-    
-    def robotPeriodic(self):
-        self.shooterPeriodic()
-        
-        
+        self.l_arm.set(arm_speed)
 def angleToRotations(angle):
-    return angle/1.8
+    return angle/1.82
