@@ -3,6 +3,8 @@ import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
 from rev import CANSparkMax
+from rev import SparkMaxPIDController
+
 # for some damn reason rev 2024.2.0 crashes on CANSparkMax init
 # rev is 2024.0.0b1.post1 rn
 
@@ -45,16 +47,28 @@ class MyRobot(wpilib.TimedRobot):
         # arm setup
         self.l_arm = CANSparkMax(6, CANSparkMax.MotorType.kBrushless)
         self.r_arm = CANSparkMax(7, CANSparkMax.MotorType.kBrushless)
+
+        self.l_arm.setInverted(False)
+
         self.r_arm.follow(self.l_arm, True) # right arm is inverted
 
         self.arm_angle = 0 # 0-90
         
         # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
         # might change this
-        self.arm_controller = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
+        self.arm_controller = self.l_arm.getPIDController()
+        self.arm_controller.setP(self.arm_Kp)
+        self.arm_controller.setI(self.arm_Ki)
+        self.arm_controller.setD(self.arm_Kd)
         self.arm_controller.setIZone(self.arm_KiZone)
+
+        self.arm_controller.setOutputRange(0.05, -0.05)
+        #use k position for arm ctrl and k velocity for shoooter ctrl
+        # self.arm_controller.setReference(,self.arm_Kp,)
         self.arm_encoder = self.l_arm.getEncoder()
         self.arm_angle = 0
+
+        
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
@@ -187,30 +201,29 @@ class MyRobot(wpilib.TimedRobot):
         if self.controller.getAButton():
             self.arm_angle = 10
 
-        # arm pid is broken rn some of this was also for testing
-        arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
-        # arm_speed = self.arm_controller.calculate(0, angleToRotations(self.arm_angle)) 
+        if self.arm_angle != self.arm_angle:
+            self.arm_controller.setIAccum(0)
+           
+        
+        #PID
+        self.arm_controller.setReference(angleToRotations(self.arm_angle), CANSparkMax.ControlType.kPosition)
+
+        
         self.error = ((self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor()) - (angleToRotations(self.arm_angle)))
+        self.error = (-self.arm_encoder.getPosition() + angleToRotations(self.arm_angle))
+        
+        print("Controller Outout: ")
+        print(self.l_arm.getAppliedOutput())
+        print("Encoder: ") 
+        print(self.arm_encoder.getPosition())
         print("Error: ")
         print(self.error)
+        print("Arm angle: ")
+        print(self.arm_angle)
+
         #make into precentage
-
-        self.arm_controller.setTolerance
-
-        arm_speed =  max(-0.45, min(0.46, arm_speed/100))
+    
         
-        
-        print("Speed: ")
-        print(arm_speed)
-
-        # different gear ratio :P
-        self.l_arm.set(arm_speed)
-
-        
-        print("Izone: ")
-        print(self.arm_KiZone)
-        print("I: ")
-        print(self.arm_Ki)
         
 def angleToRotations(angle):
-    return angle/1.82
+    return angle/1.58 #old 1.82
