@@ -1,8 +1,10 @@
 from math import fabs
+from typing import Callable
 import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
 from rev import CANSparkMax
+from wpimath.units import seconds
 # for some damn reason rev 2024.2.0 crashes on CANSparkMax init
 # rev is 2024.0.0b1.post1 rn
 
@@ -74,8 +76,19 @@ class MyRobot(wpilib.TimedRobot):
         
         #Contoller setup. We are using the OceanGate controller (logitech f310) on port 0
         self.controller = wpilib.XboxController(0)
+        self.rumble_timer = wpilib.Timer()
+        self.rumble_time = float('inf')
         self.last_pov = -1
-        
+    
+    def rumblePeriodic(self):
+        if self.rumble_timer.get() > self.rumble_time:
+            self.controller.setRumble(wpilib.XboxController.RumbleType.kBothRumble, 0)
+    
+    def rumbleFor(self, time):
+        self.rumble_time = time
+        self.rumble_timer.reset()
+        self.controller.setRumble(wpilib.XboxController.RumbleType.kBothRumble, 1)    
+    
     def loadPreferences(self):
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
             self.arm_Kp = wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp)
@@ -96,27 +109,29 @@ class MyRobot(wpilib.TimedRobot):
     def shooterPeriodic(self):
         # INTAKE
         if self.beam_break.get():
-            self.intake_timer.restart()
+            self.intake_timer.start()
             self.intake_running = False
-        
-        if self.intake_timer.get() < 0.1:
-            self.intake.set(-self.intake_speed)
-        elif self.intake_timer.get() >= 0.1 :
-            self.loaded = True
-        else: # safety
+            
+        if self.intake_timer.get() == 0: # dont know if this works after stoping and reseting :P
             if self.intake_running:
                 self.intake.set(self.intake_speed)
             else:
                 self.intake.set(0)
-                
+        elif self.intake_timer.hasElapsed(0.1):
+            self.intake_timer.stop()
+            self.intake_timer.reset()
+            self.loaded = True
+            self.rumbleFor(0.1)
+        else: # first .1 of second
+            self.intake.set(-self.intake_speed)
+         
         # SHOOTER
         if self.shooting:
             self.l_shooter.set(self.shooter_speed)
-            if self.shooter_timer.get() >= 1: # after one second
-                self.intake.set(self.intake_speed)
-                
-            if self.shooter_timer.get() >= 4:
+            if self.shooter_timer.hasElapsed(4):
                 self.shooting = False
+            elif self.shooter_timer.hasElapsed(1): # after one second
+                self.intake.set(self.intake_speed)
         else:
             self.l_shooter.set(0)
             
@@ -147,8 +162,6 @@ class MyRobot(wpilib.TimedRobot):
             self.shooter_timer.restart()
             self.shooting = True
         
-        self.shooterPeriodic()
-        
         # dpad thing pressed
         if self.controller.getPOV() != self.last_pov:
             match self.controller.getPOV():
@@ -170,8 +183,11 @@ class MyRobot(wpilib.TimedRobot):
         # different gear ratio :P
         # self.l_arm.set(arm_speed * 0.75)
         # self.r_arm.set(arm_speed)
-        
-        
+    
+    
+    def robotPeriodic(self):
+        self.shooterPeriodic()
+        self.rumblePeriodic()
         
         
 def angleToRotations(angle):
