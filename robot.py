@@ -59,6 +59,7 @@ class MyRobot(wpilib.TimedRobot):
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
+        self.l_shooter.setInverted(True)
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
         self.r_shooter.follow(self.l_shooter)
         self.shooter_timer = wpilib.Timer()
@@ -69,8 +70,11 @@ class MyRobot(wpilib.TimedRobot):
         
         # intake setup
         self.intake = CANSparkMax(10, CANSparkMax.MotorType.kBrushless) # maybe rename
+        self.intake.setInverted(True)
+        self.intake_backwards_time = 0.1
         self.intake_speed = 0.5
         self.intake_running = False
+        self.intake_backwards = False
         self.intake_timer = wpilib.Timer()
         self.loaded = False
         
@@ -78,16 +82,7 @@ class MyRobot(wpilib.TimedRobot):
         self.controller = wpilib.XboxController(0)
         self.rumble_timer = wpilib.Timer()
         self.rumble_time = float('inf')
-        self.last_pov = -1
-    
-    def rumblePeriodic(self):
-        if self.rumble_timer.get() > self.rumble_time:
-            self.controller.setRumble(wpilib.XboxController.RumbleType.kBothRumble, 0)
-    
-    def rumbleFor(self, time):
-        self.rumble_time = time
-        self.rumble_timer.reset()
-        self.controller.setRumble(wpilib.XboxController.RumbleType.kBothRumble, 1)    
+        self.last_pov = -1  
     
     def loadPreferences(self):
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
@@ -108,21 +103,19 @@ class MyRobot(wpilib.TimedRobot):
     
     def shooterPeriodic(self):
         # INTAKE
-        if self.beam_break.get():
-            self.intake_timer.start()
+        if not self.beam_break.get() and not self.loaded and not self.intake_backwards:
+            self.intake_timer.restart()
             self.intake_running = False
+            self.intake_backwards = True
             
-        if self.intake_timer.get() == 0: # dont know if this works after stoping and reseting :P
-            if self.intake_running:
-                self.intake.set(self.intake_speed)
-            else:
-                self.intake.set(0)
-        elif self.intake_timer.hasElapsed(0.1):
-            self.intake_timer.stop()
-            self.intake_timer.reset()
+        if self.intake_running:
+            self.intake.set(self.intake_speed)
+        elif not self.intake_backwards:
+            self.intake.set(0)
+        elif self.intake_timer.hasElapsed(self.intake_backwards_time):
             self.loaded = True
-            self.rumbleFor(0.1)
-        else: # first .1 of second
+            self.intake_backwards = False
+        else: 
             self.intake.set(-self.intake_speed)
          
         # SHOOTER
@@ -130,6 +123,7 @@ class MyRobot(wpilib.TimedRobot):
             self.l_shooter.set(self.shooter_speed)
             if self.shooter_timer.hasElapsed(4):
                 self.shooting = False
+                self.loaded = False
             elif self.shooter_timer.hasElapsed(1): # after one second
                 self.intake.set(self.intake_speed)
         else:
@@ -187,7 +181,6 @@ class MyRobot(wpilib.TimedRobot):
     
     def robotPeriodic(self):
         self.shooterPeriodic()
-        self.rumblePeriodic()
         
         
 def angleToRotations(angle):
