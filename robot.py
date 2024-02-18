@@ -1,10 +1,7 @@
-from math import fabs
-from typing import Callable
 import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
 from rev import CANSparkMax
-from wpimath.units import seconds
 # for some damn reason rev 2024.2.0 crashes on CANSparkMax init
 # rev is 2024.0.0b1.post1 rn
 
@@ -152,7 +149,7 @@ class MyRobot(wpilib.TimedRobot):
         if self.controller.getAButtonPressed() and not self.loaded:
             self.intake_running = not self.intake_running
             
-        if self.controller.getBackButtonPressed() and self.loaded:
+        if self.controller.getBButtonPressed() and self.loaded and not self.shooting:
             self.shooter_timer.restart()
             self.shooting = True
         
