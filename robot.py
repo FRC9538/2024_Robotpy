@@ -39,6 +39,7 @@ class MyRobot(wpilib.TimedRobot):
         self.drive_speed = 1 
 
         self.bumper_cylce = 0
+        self.inverse = 1
 
         
         
@@ -138,7 +139,8 @@ class MyRobot(wpilib.TimedRobot):
         self.loadPreferences()
     
     def teleopPeriodic(self):
-        # Sets speed to be left stick position when left bumper is pressed
+        
+        # Cycles through different drive speeds on left bumper press
         if self.controller.getLeftBumperPressed():
             match self.bumper_cylce:
                 case 0:
@@ -150,20 +152,16 @@ class MyRobot(wpilib.TimedRobot):
                 case 3:
                     self.drive_speed = 0.3
                     self.bumper_cylce = -1
-
             self.bumper_cylce += 1
-
-            rotation_precentage = 1
-            print(f"Drive speed: {self.drive_speed}")
-
         
         match self.drive_mode: # for fun :)
-            case 0:
-                # normal right stick drive
+            case 0:#normal arcade drive 
+                self.inverse = self.inverse
+                if self.controller.getRawButtonPressed: #flips the forawrd direction
+                    self.inverse *= -1
                 rotation_precentage = 1 - abs(self.controller.getRightX())
-                self.robot_drive.arcadeDrive(self.controller.getLeftX() * self.drive_speed, self.controller.getLeftY()*self.drive_speed* rotation_precentage)
-                self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, -self.controller.getRightY() * self.drive_speed)
-            case 1:
+                self.robot_drive.arcadeDrive(a* self.controller.getLeftX() * self.drive_speed,a* self.controller.getLeftY()*self.drive_speed* rotation_precentage)
+            case 1:#mariocart drive
                 # mariocart shoulder trigger drive with right stick steering
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, (self.controller.getRightTriggerAxis()-self.controller.getLeftTriggerAxis()) * self.drive_speed)
         #for fun        
