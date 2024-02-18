@@ -37,6 +37,10 @@ class MyRobot(wpilib.TimedRobot):
 
         self.drive_mode = 0
         self.drive_speed = 1 
+
+        self.bumper_cylce = 0
+
+        
         
         # invert follow motors here if needed
         self.l_drive_follow.follow(self.l_drive_lead)
@@ -136,11 +140,26 @@ class MyRobot(wpilib.TimedRobot):
     def teleopPeriodic(self):
         # Sets speed to be left stick position when left bumper is pressed
         if self.controller.getLeftBumper():
-            self.drive_speed = (-self.controller.getLeftX()+1)/2
+            match self.bumper_cylce:
+                case 0:
+                    self.drive_speed = 1
+                case 1:
+                    self.drive_speed = 0.75
+                case 2: 
+                    self.drive_speed = 0.5
+                case 3:
+                    self.drive_speed = 0.3
+                    self.bumper_cylce = 0
+
+            self.bumper_cylce += 1
+
+            self.rotation_precentage = 1 - abs(self.controller.getRightX())
+
         
         match self.drive_mode: # for fun :)
             case 0:
                 # normal right stick drive
+                self.robot_drive.arcadeDrive(self.controller.getLeftX() * self.drive_speed, self.controller.getLeftY()*self.drive_speed*self.rotation_precentage)
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, -self.controller.getRightY() * self.drive_speed)
             case 1:
                 # mariocart shoulder trigger drive with right stick steering
