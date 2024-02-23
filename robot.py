@@ -84,8 +84,6 @@ class MyRobot(wpilib.TimedRobot):
         self.controller1 = wpilib.XboxController(1)#shooting controller1
         self.last_pov = -1
         self.last_pov1 = -1
-        
-
 
     def loadPreferences(self):
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
@@ -118,24 +116,20 @@ class MyRobot(wpilib.TimedRobot):
         elif self.intake_timer.hasElapsed(self.intake_backwards_time):
             self.loaded = True
             self.intake_backwards = False
-        else: 
+        else: # intake backwards
             self.intake.set(-self.intake_speed)
          
         # SHOOTER
-        if self.shooting:#A-button is pressed
+        if self.shooting:
             self.l_shooter.set(self.shooter_speed)
             if self.shooter_timer.hasElapsed(4):
                 self.shooting = False
                 self.loaded = False
             elif self.shooter_timer.hasElapsed(1): # after one second
-                self.intake.set(self.intake_speed)
+                self.intake.set(1)
         else:
             self.l_shooter.set(0)
             
-    
-
-
-
     def teleopInit(self):
         self.loadPreferences()
     
@@ -158,26 +152,27 @@ class MyRobot(wpilib.TimedRobot):
             print("Raw")
 
         match self.drive_mode: # for fun :)
-            
             case 0:#normal arcade drive 
-                rotation_precentage = 1
-                self.robot_drive.arcadeDrive(self.inverse* self.controller.getRightX() * self.drive_speed,self.inverse* self.controller.getRightY()*self.drive_speed* rotation_precentage)
+                self.robot_drive.arcadeDrive(self.inverse * self.controller.getRightX() * self.drive_speed, # speed
+                                             self.inverse * self.controller.getRightY() * self.drive_speed) # rotation
             case 1:#mariocart drive
                 # mariocart shoulder trigger drive with right stick steering
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, (self.controller.getRightTriggerAxis()-self.controller.getLeftTriggerAxis()) * self.drive_speed)
+        
         #for fun        
         if self.controller.getStartButtonPressed() and self.controller.getRightBumper() and not COMPETITION:
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
+            
         if self.controller1.getAButtonPressed() and not self.loaded:
             self.intake_running = not self.intake_running
-            
         if self.controller1.getBButtonPressed() and self.loaded and not self.shooting:
             self.shooter_timer.restart()
             self.shooting = True
         
         # dpad thing pressed
-        if self.controller.getPOV() != self.last_pov:
-            match self.controller.getPOV():
+        pov = self.controller.getPOV()
+        if pov != self.last_pov:
+            match pov:
                 case 180:#down
                     self.arm_angle = max(0, min(180, self.arm_angle-1))
                     print("angle ", self.arm_angle)
@@ -187,11 +182,12 @@ class MyRobot(wpilib.TimedRobot):
                 case 90:#right
                     self.arm_angle = 70.25 * 1.82
                 #270 = left  +all the diagonlas
-        self.last_pov = self.controller.getPOV()
+        self.last_pov = pov
 
         #d-pad for drive controller
-        if self.controller1.getPOV() != self.last_pov1:
-            match self.controller1.getPOV():
+        pov1 = self.controller1.getPOV()
+        if pov1 != self.last_pov1:
+            match pov1:
                 case 180:#down -- intake
                     self.arm_angle = 5
                 case 0:#up -- amp
@@ -201,7 +197,7 @@ class MyRobot(wpilib.TimedRobot):
                 case 270:#left -- further from speaker
                     self.arm_angle = 60
                     # +all the diagonlas
-        self.last_pov1 = self.controller1.getPOV()#update POV
+        self.last_pov1 = pov1 #update POV
 
         #driving controller buttons
         if self.controller.getBButton():#shooting 1
