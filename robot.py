@@ -1,4 +1,3 @@
-from math import fabs
 import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
@@ -60,6 +59,7 @@ class MyRobot(wpilib.TimedRobot):
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
+        self.l_shooter.setInverted(True)
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
         self.r_shooter.follow(self.l_shooter)
         self.shooter_timer = wpilib.Timer()
@@ -70,9 +70,11 @@ class MyRobot(wpilib.TimedRobot):
         
         # intake setup
         self.intake = CANSparkMax(10, CANSparkMax.MotorType.kBrushless) # maybe rename
+        self.intake.setInverted(True)
+        self.intake_backwards_time = 0.1
         self.intake_speed = 0.5
-        self.intake_shoot_speed = 1
         self.intake_running = False
+        self.intake_backwards = False
         self.intake_timer = wpilib.Timer()
         self.loaded = False
         self.trigger_testing = 0 #for tiggered intake and shooter
@@ -102,45 +104,31 @@ class MyRobot(wpilib.TimedRobot):
             self.arm_Kd = wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd)
             self.arm_controller.setD(self.arm_Kd)
     
-
-
-
-
-
-
     def shooterPeriodic(self):
         # INTAKE
-        #beambreak is tripped (false)
-        print(self.beam_break.get())
-        if self.beam_break.get() == False:#beambreak reads disconnection
-            self.intake_timer.restart()#restart intake timer
-            self.loaded = True#note is loaded
-            self.intake_running = False#stop intake
-        
-        if self.intake_running and not self.loaded:#run intake until beambrake triggers -- on Button press
+        if not self.beam_break.get() and not self.loaded and not self.intake_backwards:
+            self.intake_timer.restart()
+            self.intake_running = False
+            self.intake_backwards = True
+            
+        if self.intake_running:
+            self.intake.set(self.intake_speed)
+        elif not self.intake_backwards:
+            self.intake.set(0)
+        elif self.intake_timer.hasElapsed(self.intake_backwards_time):
+            self.loaded = True
+            self.intake_backwards = False
+        else: 
             self.intake.set(-self.intake_speed)
-        #reverses intake
-        if self.loaded and self.intake_timer.get() >= 0.1 and self.intake_timer.get() <= 0.5:#between time a and b
-            self.intake.set(0.5)#reverses intake for interval [a,b]
-        elif self.intake_timer > 0.5:
-            self.intake_timer.stop()#stops the timer (helps with performance)
-        else:#safety (probably not needed)
-            if self.intake_running:
-                # self.intake.set(self.intake_speed)
-                print("wrong")
-            else:
-                self.intake.set(0)
-                
-
-
+         
         # SHOOTER
         if self.shooting:#A-button is pressed
             self.l_shooter.set(self.shooter_speed)
-            if self.shooter_timer.get() >= 1:    #after 1 second
-                self.intake.set(self.intake_speed)  
-            elif self.shooter_timer.get() >= 4:  #after 4 seconds
-                self.l_shooter.set(0)
-                self.shooting = False#end shooting
+            if self.shooter_timer.hasElapsed(4):
+                self.shooting = False
+                self.loaded = False
+            elif self.shooter_timer.hasElapsed(1): # after one second
+                self.intake.set(self.intake_speed)
         else:
             self.l_shooter.set(0)
             
@@ -180,12 +168,13 @@ class MyRobot(wpilib.TimedRobot):
         #for fun        
         if self.controller.getStartButtonPressed() and self.controller.getRightBumper() and not COMPETITION:
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
+        if self.controller1.getAButtonPressed() and not self.loaded:
+            self.intake_running = not self.intake_running
+            
+        if self.controller1.getBButtonPressed() and self.loaded and not self.shooting:
+            self.shooter_timer.restart()
+            self.shooting = True
         
-        
-        # intake and shooter manual testing
-        self.intake.set(-self.controller.getLeftTriggerAxis())
-        self.l_shooter.set(-self.controller.getRightTriggerAxis())
-                
         # dpad thing pressed
         if self.controller.getPOV() != self.last_pov:
             match self.controller.getPOV():
@@ -225,18 +214,6 @@ class MyRobot(wpilib.TimedRobot):
             print(self.arm_encoder.getPosition())
         if self.controller.getAButton():#intake
             self.arm_angle = 3
-
-        #shooting controller1 buttons
-        if self.controller1.getBButton() and not self.intake_running:#ButtonB -- intake
-            self.intake_running = True
-            self.intake_timer.restart()
-        while self.controller1.getYButton():#ButtonY -- binds arm to left joystick vertical axis
-            self.arm_angle += self.controller1.getLeftX()
-        if self.controller1.getXButton():#ButtonX -- 
-            print("nothing yet")
-        if self.controller1.getAButton():#ButtonA -- shooting
-            self.shooting = True
-            self.shooter_timer.restart()
 
         #PID control (pls switch to rev)
         arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
