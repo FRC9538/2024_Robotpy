@@ -20,7 +20,7 @@ robotpy_extras = [
     # "phoenix5"
     # "phoenix6"
     # "playingwithfusion"
-    # "rev" # this rev is newest version (2024.2.0) that does not work currently
+    "rev"
     # "romi"
     # "sim"
     # "xrp"
@@ -28,4 +28,4 @@ robotpy_extras = [
 
 # Other pip packages to install
 
-requires = ["robotpy-rev==2024.0.0b1.post1"] # 2024.0.0b1.post1 is newest version that does not crash (its just the version right before 2024.2.0)
+requires = []

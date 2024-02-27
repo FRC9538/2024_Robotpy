@@ -2,8 +2,6 @@ import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
 from rev import CANSparkMax
-# for some damn reason rev 2024.2.0 crashes on CANSparkMax init
-# rev is 2024.0.0b1.post1 rn
 
 COMPETITION = False
 
