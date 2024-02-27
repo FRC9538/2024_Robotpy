@@ -1,4 +1,3 @@
-from math import fabs
 import wpilib
 import wpilib.drive
 from wpimath.controller import PIDController
@@ -18,6 +17,13 @@ ARMDKEY = "ArmD"
 class MyRobot(wpilib.TimedRobot):
     def robotInit(self):
         # Preferences init
+        self.shooting1 = 20 #arm angle against the speaker
+        self.shooting2 = 30 #arm angle three feet from speaker
+        self.intake_angle = 1.5 #arm angle for intake
+        self.amp_angle = 120 #arm angle for amp
+        self.intake_backwards_time = 0.45
+        self.intake_speed = 0.15
+
         # defaults
         self.arm_Kp = 0 #7.0
         self.arm_Ki = 0 #doesn't work w/ WPILib
@@ -33,6 +39,17 @@ class MyRobot(wpilib.TimedRobot):
         self.r_drive_lead   = CANSparkMax(2, CANSparkMax.MotorType.kBrushed)
         self.r_drive_follow = CANSparkMax(4, CANSparkMax.MotorType.kBrushed)
 
+        self.l_drive_lead.restoreFactoryDefaults(True)
+        self.l_drive_follow.restoreFactoryDefaults(True)
+        self.r_drive_lead.restoreFactoryDefaults(True)
+        self.r_drive_follow.restoreFactoryDefaults(True)
+
+        self.l_drive_lead.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        self.l_drive_follow.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        self.r_drive_lead.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        self.r_drive_follow.setIdleMode(CANSparkMax.IdleMode.kBrake)
+
+
         self.robot_drive = wpilib.drive.DifferentialDrive(self.l_drive_lead, self.r_drive_lead)
 
 
@@ -46,33 +63,61 @@ class MyRobot(wpilib.TimedRobot):
         self.r_drive_follow.follow(self.r_drive_lead)
         
         # arm setup
-        self.l_arm = CANSparkMax(6, CANSparkMax.MotorType.kBrushless)
-        self.r_arm = CANSparkMax(7, CANSparkMax.MotorType.kBrushless)
-        self.r_arm.follow(self.l_arm, True) # right arm is inverted
+        self.l_arm = CANSparkMax(6, CANSparkMax.MotorType.kBrushless)#ID 6: Left arm
+        self.r_arm = CANSparkMax(7, CANSparkMax.MotorType.kBrushless)#ID 7: Right arm
+        self.r_arm.follow(self.l_arm, True)
+        self.r_arm.burnFlash()
+        self.l_arm.burnFlash()
+        self.l_arm.clearFaults()
+        self.r_arm.clearFaults()
+        self.l_arm.restoreFactoryDefaults(True)
+        self.r_arm.restoreFactoryDefaults(True)
+
+        self.l_arm.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        self.r_arm.setIdleMode(CANSparkMax.IdleMode.kBrake)
+
+        
+        self.l_arm.setInverted(True)
+        self.r_arm.setInverted(True)
 
         self.arm_angle = 10 # 0-90
+        self.arm_speed = 0
         
         # use preferences to tune these (you can edit preferences in SmartDashboard and Shuffleboard)
         # might change this
         self.arm_controller = PIDController(self.arm_Kp, self.arm_Ki, self.arm_Kd)
         self.arm_controller.setIZone(self.arm_KiZone)
-        self.arm_encoder = self.l_arm.getEncoder()
+        self.arm_encoder = self.r_arm.getEncoder()
+        # self.arm_encoder.setPosition(0)
+
         
         # shooter setup
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
+        self.l_shooter.restoreFactoryDefaults(True)
+        self.l_shooter.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        self.l_shooter.setInverted(True)
+
+        self.l_shooter.setInverted(False)
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
+        self.r_shooter.restoreFactoryDefaults(True)
+        self.r_shooter.setIdleMode(CANSparkMax.IdleMode.kBrake)
+
         self.r_shooter.follow(self.l_shooter)
         self.shooter_timer = wpilib.Timer()
         self.shooter_speed = 1
         self.shooting = False
 
         self.beam_break = wpilib.DigitalInput(9)
+        self.beam_break_timer = wpilib.Timer()
         
         # intake setup
-        self.intake = CANSparkMax(10, CANSparkMax.MotorType.kBrushless) # maybe rename
-        self.intake_speed = 0.5
-        self.intake_shoot_speed = 1
+        self.intake = CANSparkMax(10, CANSparkMax.MotorType.kBrushless)
+        self.intake.setInverted(True)
+        self.intake.restoreFactoryDefaults(True)
+        self.intake.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        
         self.intake_running = False
+        self.intake_backwards = False
         self.intake_timer = wpilib.Timer()
         self.loaded = False
         self.trigger_testing = 0 #for tiggered intake and shooter
@@ -82,8 +127,16 @@ class MyRobot(wpilib.TimedRobot):
         self.controller1 = wpilib.XboxController(1)#shooting controller1
         self.last_pov = -1
         self.last_pov1 = -1
-        
 
+        self.r_arm.burnFlash()
+        self.l_arm.burnFlash()
+        self.l_drive_lead.burnFlash()
+        self.l_drive_follow.burnFlash()
+        self.r_drive_lead.burnFlash()
+        self.r_drive_follow.burnFlash()
+        self.l_shooter.burnFlash()
+        self.r_shooter.burnFlash()
+        self.intake.burnFlash()
 
     def loadPreferences(self):
         if self.arm_Kp != wpilib.Preferences.getDouble(ARMPKEY, self.arm_Kp):
@@ -102,52 +155,6 @@ class MyRobot(wpilib.TimedRobot):
             self.arm_Kd = wpilib.Preferences.getDouble(ARMDKEY, self.arm_Kd)
             self.arm_controller.setD(self.arm_Kd)
     
-
-
-
-
-
-
-    def shooterPeriodic(self):
-        # INTAKE
-        #beambreak is tripped (false)
-        print(self.beam_break.get())
-        if self.beam_break.get() == False:#beambreak reads disconnection
-            self.intake_timer.restart()#restart intake timer
-            self.loaded = True#note is loaded
-            self.intake_running = False#stop intake
-        
-        if self.intake_running and not self.loaded:#run intake until beambrake triggers -- on Button press
-            self.intake.set(-self.intake_speed)
-        #reverses intake
-        if self.loaded and self.intake_timer.get() >= 0.1 and self.intake_timer.get() <= 0.5:#between time a and b
-            self.intake.set(0.5)#reverses intake for interval [a,b]
-        elif self.intake_timer > 0.5:
-            self.intake_timer.stop()#stops the timer (helps with performance)
-        else:#safety (probably not needed)
-            if self.intake_running:
-                # self.intake.set(self.intake_speed)
-                print("wrong")
-            else:
-                self.intake.set(0)
-                
-
-
-        # SHOOTER
-        if self.shooting:#A-button is pressed
-            self.l_shooter.set(self.shooter_speed)
-            if self.shooter_timer.get() >= 1:    #after 1 second
-                self.intake.set(self.intake_speed)  
-            elif self.shooter_timer.get() >= 4:  #after 4 seconds
-                self.l_shooter.set(0)
-                self.shooting = False#end shooting
-        else:
-            self.l_shooter.set(0)
-            
-    
-
-
-
     def teleopInit(self):
         self.loadPreferences()
     
@@ -167,28 +174,30 @@ class MyRobot(wpilib.TimedRobot):
 
         if self.controller.getBackButtonPressed(): #flips the forawrd direction
             self.inverse *= -1
-            print("Raw")
 
         match self.drive_mode: # for fun :)
-            
             case 0:#normal arcade drive 
-                rotation_precentage = 1
-                self.robot_drive.arcadeDrive(self.inverse* self.controller.getRightX() * self.drive_speed,self.inverse* self.controller.getRightY()*self.drive_speed* rotation_precentage)
+                self.robot_drive.arcadeDrive(-1 * self.controller.getRightX() * self.drive_speed, # speed
+                                             self.inverse * self.controller.getRightY() * self.drive_speed) # rotation
             case 1:#mariocart drive
                 # mariocart shoulder trigger drive with right stick steering
                 self.robot_drive.arcadeDrive(-self.controller.getRightX() * self.drive_speed, (self.controller.getRightTriggerAxis()-self.controller.getLeftTriggerAxis()) * self.drive_speed)
+        
         #for fun        
         if self.controller.getStartButtonPressed() and self.controller.getRightBumper() and not COMPETITION:
             self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
+            
+        if self.controller1.getAButtonPressed() and not self.loaded:
+            self.intake_running = not self.intake_running
+            print(self.intake_running)
+        if self.controller1.getBButtonPressed() and self.loaded and not self.shooting:
+            self.shooter_timer.restart()
+            self.shooting = True
         
-        
-        # intake and shooter manual testing
-        self.intake.set(-self.controller.getLeftTriggerAxis())
-        self.l_shooter.set(-self.controller.getRightTriggerAxis())
-                
         # dpad thing pressed
-        if self.controller.getPOV() != self.last_pov:
-            match self.controller.getPOV():
+        pov = self.controller.getPOV()
+        if pov != self.last_pov:
+            match pov:
                 case 180:#down
                     self.arm_angle = max(0, min(180, self.arm_angle-1))
                     print("angle ", self.arm_angle)
@@ -198,53 +207,79 @@ class MyRobot(wpilib.TimedRobot):
                 case 90:#right
                     self.arm_angle = 70.25 * 1.82
                 #270 = left  +all the diagonlas
-        self.last_pov = self.controller.getPOV()
+        self.last_pov = pov
 
         #d-pad for drive controller
-        if self.controller1.getPOV() != self.last_pov1:
-            match self.controller1.getPOV():
+        pov1 = self.controller1.getPOV()
+        if pov1 != self.last_pov1:
+            match pov1:
                 case 180:#down -- intake
-                    self.arm_angle = 5
+                    self.arm_angle = self.intake_angle
                 case 0:#up -- amp
                     self.arm_angle = 120
                 case 90:#right -- touching speaker
-                    self.arm_angle = 40
+                    self.arm_angle = self.shooting1
                 case 270:#left -- further from speaker
-                    self.arm_angle = 60
+                    self.arm_angle = 30
                     # +all the diagonlas
-        self.last_pov1 = self.controller1.getPOV()#update POV
+        self.last_pov1 = pov1 #update POV
 
         #driving controller buttons
-        if self.controller.getBButton():#shooting 1
-            self.arm_angle = 40
-        if self.controller.getYButton():#shooting 2
-            self.arm_angle = 60
-            print(self.arm_encoder.getPosition())
-        if self.controller.getXButton():#amplifier
-            self.arm_angle = 100
-            print(self.arm_encoder.getPosition())
-        if self.controller.getAButton():#intake
-            self.arm_angle = 3
+        if self.controller.getYButton():#shooting 1
+            self.arm_encoder.setPosition(0)
+            self.arm_angle = 0
+        if self.controller.getAButton():#shooting 2
+            self.l_arm.setIdleMode(CANSparkMax.IdleMode.kBrake)
+            self.r_arm.setIdleMode(CANSparkMax.IdleMode.kBrake)
+        if self.controller.getBButton():#amplifier
+            self.l_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
+            self.r_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
 
-        #shooting controller1 buttons
-        if self.controller1.getBButton() and not self.intake_running:#ButtonB -- intake
-            self.intake_running = True
+        self.l_shooter.set(self.controller1.getLeftTriggerAxis())
+        self.intake.set(self.inverse* self.controller1.getRightTriggerAxis())
+
+
+        #intake
+        if self.beam_break_timer.advanceIfElapsed(0.04):
+            self.intake_running = False
+            self.intake_backwards = True
+            self.beam_break_timer.stop()
             self.intake_timer.restart()
-        while self.controller1.getYButton():#ButtonY -- binds arm to left joystick vertical axis
-            self.arm_angle += self.controller1.getLeftX()
-        if self.controller1.getXButton():#ButtonX -- 
-            print("nothing yet")
-        if self.controller1.getAButton():#ButtonA -- shooting
-            self.shooting = True
-            self.shooter_timer.restart()
+
+        if not self.beam_break.get() and not self.loaded and not self.intake_backwards:
+            self.beam_break_timer.restart()
+        if self.intake_running:
+            self.intake.set(-0.8)
+        elif not self.intake_backwards:
+            self.intake.set(0)
+        elif self.intake_timer.hasElapsed(self.intake_backwards_time):
+            self.intake_timer.stop()
+            self.loaded = True
+            self.intake_backwards = False
+        elif self.intake_backwards: # intake backwards
+            self.intake.set(self.intake_speed)
+            self.arm_angle = self.shooting1
+
+        # SHOOTER
+        if self.shooting:
+            self.l_shooter.set(-self.shooter_speed)
+            if self.shooter_timer.hasElapsed(1):
+                self.shooting = False
+                self.loaded = False
+            elif self.shooter_timer.hasElapsed(0.7): # after one second
+                self.intake.set(-1)
+        else:
+            self.l_shooter.set(0)
+
 
         #PID control (pls switch to rev)
-        arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
+        self.arm_speed = self.arm_controller.calculate(self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor(), angleToRotations(self.arm_angle))
         self.error = ((self.arm_encoder.getPosition()*self.arm_encoder.getPositionConversionFactor()) - (angleToRotations(self.arm_angle))) #error
 
         #make into precentage
-        arm_speed =  max(-0.45, min(0.46, arm_speed/100)) #caps the speed
-        self.l_arm.set(arm_speed) #sets speed
+        self.arm_speed =  max(-0.45, min(0.46, self.arm_speed/100)) #caps the speed
+        self.l_arm.set(self.arm_speed) #sets speed
+
 
 def angleToRotations(angle):
     return angle/1.82 #the conversion ratio found with gear ratio
