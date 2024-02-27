@@ -97,7 +97,6 @@ class MyRobot(wpilib.TimedRobot):
         self.l_shooter.setIdleMode(CANSparkMax.IdleMode.kBrake)
         self.l_shooter.setInverted(True)
 
-        self.l_shooter.setInverted(False)
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
         self.r_shooter.restoreFactoryDefaults(True)
         self.r_shooter.setIdleMode(CANSparkMax.IdleMode.kBrake)
@@ -115,7 +114,7 @@ class MyRobot(wpilib.TimedRobot):
         self.intake.setInverted(True)
         self.intake.restoreFactoryDefaults(True)
         self.intake.setIdleMode(CANSparkMax.IdleMode.kBrake)
-        
+        self.intake_speed = 0.5
         self.intake_running = False
         self.intake_backwards = False
         self.intake_timer = wpilib.Timer()
@@ -235,8 +234,11 @@ class MyRobot(wpilib.TimedRobot):
             self.l_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
             self.r_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
 
-        self.l_shooter.set(self.controller1.getLeftTriggerAxis())
-        self.intake.set(self.inverse* self.controller1.getRightTriggerAxis())
+
+        #for testing
+        if not COMPETITION:
+            self.l_shooter.set(self.controller.getLeftTriggerAxis())
+            self.intake.set(self.inverse* self.controller.getRightTriggerAxis())
 
 
         #intake
