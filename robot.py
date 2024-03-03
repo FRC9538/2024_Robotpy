@@ -19,8 +19,8 @@ class MyRobot(wpilib.TimedRobot):
         self.shooting2 = 30 #arm angle three feet from speaker
         self.intake_angle = 1.5 #arm angle for intake
         self.amp_angle = 120 #arm angle for amp
-        self.intake_backwards_time = 0.45
-        self.intake_speed = 0.15
+        self.intake_backwards_time = 0.15
+        self.intake_backwards_speed = 0.3
 
         # defaults
         self.arm_Kp = 0 #7.0
@@ -41,6 +41,11 @@ class MyRobot(wpilib.TimedRobot):
         self.l_drive_follow.restoreFactoryDefaults(True)
         self.r_drive_lead.restoreFactoryDefaults(True)
         self.r_drive_follow.restoreFactoryDefaults(True)
+
+        self.l_drive_lead.setOpenLoopRampRate(0.1)
+        self.l_drive_follow.setOpenLoopRampRate(0.1)
+        self.r_drive_lead.setOpenLoopRampRate(0.1)
+        self.r_drive_follow.setOpenLoopRampRate(0.1)
 
         self.l_drive_lead.setIdleMode(CANSparkMax.IdleMode.kBrake)
         self.l_drive_follow.setIdleMode(CANSparkMax.IdleMode.kBrake)
@@ -77,7 +82,7 @@ class MyRobot(wpilib.TimedRobot):
         self.l_arm.setInverted(True)
         self.r_arm.setInverted(True)
 
-        self.arm_angle = 10 # 0-90
+        self.arm_angle = 10
         self.arm_speed = 0
         
         # use preferences to tune these (you can edit preferences in SmartDashboard or Shuffleboard)
@@ -91,7 +96,7 @@ class MyRobot(wpilib.TimedRobot):
         self.l_shooter = CANSparkMax(8, CANSparkMax.MotorType.kBrushless)
         self.l_shooter.restoreFactoryDefaults(True)
         self.l_shooter.setIdleMode(CANSparkMax.IdleMode.kBrake)
-        self.l_shooter.setInverted(True)
+        # self.l_shooter.setInverted(True)
 
         self.r_shooter = CANSparkMax(9, CANSparkMax.MotorType.kBrushless)
         self.r_shooter.restoreFactoryDefaults(True)
@@ -158,19 +163,27 @@ class MyRobot(wpilib.TimedRobot):
     
     def teleopPeriodic(self):
         # Cycles through different drive speeds on left bumper press
-        if self.drive_controller.getLeftBumperPressed():
-            self.bumper_cylce += 1
-            match self.bumper_cylce:
-                case 0:
-                    self.drive_speed = 1
-                case 1:
-                    self.drive_speed = 0.75
-                case 2: 
-                    self.drive_speed = 0.5
-                    self.bumper_cylce = -1
+        try:
+            if self.drive_controller.getLeftBumperPressed():
+                self.bumper_cylce += 1
+                match self.bumper_cylce:
+                    case 0:
+                        self.drive_speed = 1
+                    case 1:
+                        self.drive_speed = 0.75
+                    case 2: 
+                        self.drive_speed = 0.5
+                        self.bumper_cylce = -1
+        except:
+            if not COMPETITION:
+                raise
 
-        if self.drive_controller.getBackButtonPressed(): #flips the forawrd direction
-            self.inverse *= -1
+        try:
+            if self.drive_controller.getBackButtonPressed(): #flips the forawrd direction
+                self.inverse *= -1
+        except:
+            if not COMPETITION:
+                raise
 
         try:
             # match self.drive_mode: # for fun :)
@@ -190,36 +203,44 @@ class MyRobot(wpilib.TimedRobot):
         #         self.drive_mode = 0 if self.drive_mode == 1 else self.drive_mode+1
         
         # dpad thing pressed
-        pov = self.drive_controller.getPOV()
-        if pov != self.last_pov:
-            match pov:
-                case 180:#down
-                    self.arm_angle = max(0, min(180, self.arm_angle-1))
-                    # if not COMPETITION:
-                    #     print("angle ", self.arm_angle)
-                case 0:#up
-                    self.arm_angle = max(0, min(180, self.arm_angle+1))
-                    # if not COMPETITION:
-                    #     print("angle ", self.arm_angle)
-                case 90:#right
-                    self.arm_angle = 70.25 * 1.82
-                # 270 = left  +all the diagonlas
-        self.last_pov = pov
+        try:
+            pov = self.drive_controller.getPOV()
+            if pov != self.last_pov:
+                match pov:
+                    case 180:#down
+                        self.arm_angle = max(-100, min(100, self.arm_angle-3))
+                        # if not COMPETITION:
+                        #     print("angle ", self.arm_angle)
+                    case 0:#up
+                        self.arm_angle = max(-100, min(100, self.arm_angle+3))
+                        # if not COMPETITION:
+                        #     print("angle ", self.arm_angle)
+                    case 90:#right
+                        self.arm_angle = 70.25 * 1.82
+                    # 270 = left  +all the diagonlas
+            self.last_pov = pov
+        except:
+            if not COMPETITION:
+                raise
 
         #d-pad for drive controller
-        pov1 = self.shooting_controller.getPOV()
-        if pov1 != self.last_pov1:
-            match pov1:
-                case 180:#down -- intake
-                    self.arm_angle = self.intake_angle
-                case 0:#up -- amp
-                    self.arm_angle = 120
-                case 90:#right -- touching speaker
-                    self.arm_angle = self.shooting1
-                case 270:#left -- further from speaker
-                    self.arm_angle = 30
-                    # +all the diagonlas
-        self.last_pov1 = pov1 #update POV
+        try:
+            pov1 = self.shooting_controller.getPOV()
+            if pov1 != self.last_pov1:
+                match pov1:
+                    case 180:#down -- intake
+                        self.arm_angle = self.intake_angle
+                    case 0:#up -- amp
+                        self.arm_angle = 120
+                    case 90:#right -- touching speaker
+                        self.arm_angle = self.shooting1
+                    case 270:#left -- further from speaker
+                        self.arm_angle = 30
+                        # +all the diagonlas
+            self.last_pov1 = pov1 #update POV
+        except:
+            if not COMPETITION:
+                raise
 
         #driving controller buttons
         try:
@@ -232,6 +253,8 @@ class MyRobot(wpilib.TimedRobot):
             if self.drive_controller.getBButton():#amplifier
                 self.l_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
                 self.r_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
+            if self.drive_controller.getXButton():#amplifier
+                self.arm_angle = 40
         except:
             if not COMPETITION:
                 raise
@@ -242,51 +265,57 @@ class MyRobot(wpilib.TimedRobot):
         # self.l_shooter.set(self.drive_controller.getLeftTriggerAxis())
         # self.intake.set(self.inverse * self.drive_controller.getRightTriggerAxis())
 
+        try:
+            if not self.loaded and self.shooting_controller.getAButtonPressed():
+                self.intake_running = not self.intake_running
+            elif self.loaded and not self.shooting and self.shooting_controller.getBButtonPressed():
+                self.shooter_timer.restart()
+                self.shooting = True
+        except:
+            if not COMPETITION:
+                raise
 
-        if not self.loaded and self.shooting_controller.getAButtonPressed():
-            self.intake_running = not self.intake_running
-            # if not COMPETITION:
-            #     print(self.intake_running)
-        elif self.loaded and not self.shooting and self.shooting_controller.getBButtonPressed():
-            self.shooter_timer.restart()
-            self.shooting = True
 
-        #intake
-        if self.intake_running:
-            # beam break wait time
-            if self.beam_break_timer.advanceIfElapsed(0.04):
-                self.intake_running = False
-                self.intake_backwards = True
-                self.beam_break_timer.stop()
-                self.intake_timer.restart()
-                
-            # check beam break
-            if not self.loaded and not self.beam_break.get():
-                self.beam_break_timer.restart()
-                
-            self.intake.set(-0.8)
-        elif not self.intake_backwards:
-            self.intake.set(0)
-        elif self.intake_timer.hasElapsed(self.intake_backwards_time):
-            self.intake_timer.stop()
-            self.loaded = True
-            self.intake_backwards = False
-        else: # intake backwards
-            self.intake.set(self.intake_speed)
-            self.arm_angle = self.shooting1
-
-        # SHOOTER
-        if self.shooting:
-            self.r_shooter.set(-self.shooter_speed)
-            self.l_shooter.set(-self.shooter_speed)
-            if self.shooter_timer.hasElapsed(2.75):
-                self.shooting = False
-                self.loaded = False
-                self.shooter_timer.stop()
-                self.r_shooter.set(0)
-                self.l_shooter.set(0)
-            elif self.shooter_timer.hasElapsed(2):
-                self.intake.set(-1)
+        # SHOOTER and intake
+        try:
+            if self.shooting:
+                self.r_shooter.set(-self.shooter_speed)
+                self.l_shooter.set(-self.shooter_speed)
+                if self.shooter_timer.hasElapsed(2.75):
+                    self.shooting = False
+                    self.loaded = False
+                    self.shooter_timer.stop()
+                    self.r_shooter.set(0)
+                    self.l_shooter.set(0)
+                    self.intake.set(0)
+                elif self.shooter_timer.hasElapsed(2):
+                    self.intake.set(-1)
+            else:
+                if self.intake_running:
+                    # beam break wait time
+                    if self.beam_break_timer.advanceIfElapsed(0.04):
+                        self.intake_running = False
+                        self.intake_backwards = True
+                        self.beam_break_timer.stop()
+                        self.intake_timer.restart()
+                        
+                    # check beam break
+                    if not self.loaded and not self.beam_break.get():
+                        self.beam_break_timer.restart()
+                        
+                    self.intake.set(-self.intake_speed)
+                elif not self.intake_backwards:
+                    self.intake.set(0)
+                elif self.intake_timer.hasElapsed(self.intake_backwards_time):
+                    self.intake_timer.stop()
+                    self.loaded = True
+                    self.intake_backwards = False
+                else: # intake backwards
+                    self.intake.set(self.intake_backwards_speed)
+                    self.arm_angle = self.shooting1
+        except:
+            if not COMPETITION:
+                raise
 
 
         #PID control (pls switch to rev)
@@ -299,8 +328,13 @@ class MyRobot(wpilib.TimedRobot):
                 raise
 
         #make into precentage
-        self.arm_speed = max(-0.45, min(0.46, self.arm_speed/100)) #caps the speed
-        self.l_arm.set(self.arm_speed) #sets speed
+        try:
+            self.arm_speed = max(-0.45, min(0.46, self.arm_speed/100)) #caps the speed
+            self.l_arm.set(self.arm_speed) #sets speed
+        except:
+            if not COMPETITION:
+                raise
+            
 
     def autonomousInit(self):
         self.autonomous_time.restart()
@@ -311,13 +345,21 @@ class MyRobot(wpilib.TimedRobot):
                 self.autonomousPeriodic = self.autonomousPeriodic1
                 
     def autonomousPeriodic1(self):
-        if self.autonomous_time.hasElapsed(1):
-            if not self.autonomous_time.hasElapsed(1 + 2.75):
-                self.r_shooter.set(-self.shooter_speed)
-                self.l_shooter.set(-self.shooter_speed)
-                if self.autonomous_time.hasElapsed(1 + 2):
-                    self.intake.set(-1)
-        
+        try:
+            if self.autonomous_time.hasElapsed(1):
+                if not self.autonomous_time.hasElapsed(1 + 2.75):
+                    self.r_shooter.set(-self.shooter_speed)
+                    self.l_shooter.set(-self.shooter_speed)
+                    if self.autonomous_time.hasElapsed(1 + 2):
+                        self.intake.set(-1)
+                else: 
+                    self.r_shooter.set(0)
+                    self.l_shooter.set(0)
+                    self.intake.set(0)
+        except:
+            if not COMPETITION:
+                raise
+
         try:
             arm_pos = self.arm_encoder.getPosition() * self.arm_encoder.getPositionConversionFactor()
             self.arm_speed = self.arm_controller.calculate(arm_pos, angleToRotations(self.arm_angle))
@@ -327,8 +369,13 @@ class MyRobot(wpilib.TimedRobot):
                 raise
 
         #make into precentage
-        self.arm_speed = max(-0.45, min(0.46, self.arm_speed/100)) #caps the speed
-        self.l_arm.set(self.arm_speed) #sets speed
+        try:
+            self.arm_speed = max(-0.45, min(0.46, self.arm_speed/100)) #caps the speed
+            self.l_arm.set(self.arm_speed) #sets speed
+        except:
+            if not COMPETITION:
+                raise
+            
 
 def angleToRotations(angle):
     return angle/1.82 #the conversion ratio found with gear ratio
