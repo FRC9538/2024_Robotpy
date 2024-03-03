@@ -253,8 +253,9 @@ class MyRobot(wpilib.TimedRobot):
             if self.drive_controller.getBButton():#amplifier
                 self.l_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
                 self.r_arm.setIdleMode(CANSparkMax.IdleMode.kCoast)
-            if self.drive_controller.getXButton():#amplifier
-                self.arm_angle = 40
+            if self.drive_controller.getXButton():
+                self.loaded = False
+                self.intake_running = False
         except:
             if not COMPETITION:
                 raise
@@ -262,13 +263,18 @@ class MyRobot(wpilib.TimedRobot):
 
         #for testing
         # if not COMPETITION:
-        # self.l_shooter.set(self.drive_controller.getLeftTriggerAxis())
-        # self.intake.set(self.inverse * self.drive_controller.getRightTriggerAxis())
+        self.r_shooter.set(-self.shooting_controller.getRightTriggerAxis())
+        self.l_shooter.set(-self.shooting_controller.getRightTriggerAxis())
+        if self.drive_controller.getRightBumper():
+            self.intake.set(self.drive_controller.getRightTriggerAxis() * self.intake_backwards_speed)
+        else:
+            self.intake.set(-self.shooting_controller.getLeftTriggerAxis())
 
         try:
             if not self.loaded and self.shooting_controller.getAButtonPressed():
                 self.intake_running = not self.intake_running
-            elif self.loaded and not self.shooting and self.shooting_controller.getBButtonPressed():
+
+            if self.loaded and not self.shooting and self.shooting_controller.getBButtonPressed():
                 self.shooter_timer.restart()
                 self.shooting = True
         except:
@@ -277,45 +283,45 @@ class MyRobot(wpilib.TimedRobot):
 
 
         # SHOOTER and intake
-        try:
-            if self.shooting:
-                self.r_shooter.set(-self.shooter_speed)
-                self.l_shooter.set(-self.shooter_speed)
-                if self.shooter_timer.hasElapsed(2.75):
-                    self.shooting = False
-                    self.loaded = False
-                    self.shooter_timer.stop()
-                    self.r_shooter.set(0)
-                    self.l_shooter.set(0)
-                    self.intake.set(0)
-                elif self.shooter_timer.hasElapsed(2):
-                    self.intake.set(-1)
-            else:
-                if self.intake_running:
-                    # beam break wait time
-                    if self.beam_break_timer.advanceIfElapsed(0.04):
-                        self.intake_running = False
-                        self.intake_backwards = True
-                        self.beam_break_timer.stop()
-                        self.intake_timer.restart()
-                        
-                    # check beam break
-                    if not self.loaded and not self.beam_break.get():
-                        self.beam_break_timer.restart()
-                        
-                    self.intake.set(-self.intake_speed)
-                elif not self.intake_backwards:
-                    self.intake.set(0)
-                elif self.intake_timer.hasElapsed(self.intake_backwards_time):
-                    self.intake_timer.stop()
-                    self.loaded = True
-                    self.intake_backwards = False
-                else: # intake backwards
-                    self.intake.set(self.intake_backwards_speed)
-                    self.arm_angle = self.shooting1
-        except:
-            if not COMPETITION:
-                raise
+        # try:
+        #     if self.shooting:
+        #         self.r_shooter.set(-self.shooter_speed)
+        #         self.l_shooter.set(-self.shooter_speed)
+        #         if self.shooter_timer.hasElapsed(2.75):
+        #             self.shooting = False
+        #             self.loaded = False
+        #             self.shooter_timer.stop()
+        #             self.r_shooter.set(0)
+        #             self.l_shooter.set(0)
+        #             self.intake.set(0)
+        #         elif self.shooter_timer.hasElapsed(2):
+        #             self.intake.set(-1)
+
+        #     if self.intake_running:
+        #         # beam break wait time
+        #         if self.beam_break_timer.advanceIfElapsed(0.04):
+        #             self.intake_running = False
+        #             self.intake_backwards = True
+        #             self.beam_break_timer.stop()
+        #             self.intake_timer.restart()
+                    
+        #         # check beam break
+        #         if not self.beam_break.get():
+        #             self.beam_break_timer.restart()
+                    
+        #         self.intake.set(-self.intake_speed)
+        #     elif not self.intake_backwards:
+        #         self.intake.set(0)
+        #     elif self.intake_timer.hasElapsed(self.intake_backwards_time):
+        #         self.intake_timer.stop()
+        #         self.loaded = True
+        #         self.intake_backwards = False
+        #     else: # intake backwards
+        #         self.intake.set(self.intake_backwards_speed)
+        #         self.arm_angle = self.shooting1
+        # except:
+        #     if not COMPETITION:
+        #         raise
 
 
         #PID control (pls switch to rev)
